@@ -337,11 +337,12 @@ def main():
         sys.exit(0)
 
 
-    # 6. Determine Input for {ARGS}
+    # 6. Determine Input for {ARGS}a
+    input_args = ""
     if args.optional_text:
         input_args = " ".join(args.optional_text)
         logging.debug("--- Using command line arguments for {ARGS} ---")
-    else:
+    elif "{ARGS}" in prompt_template:
         if sys.stdin.isatty():
              logging.debug("--- Reading from stdin for {ARGS} (press Ctrl+D to end) ---")
         else:
