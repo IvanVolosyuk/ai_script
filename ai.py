@@ -6,8 +6,11 @@ AI script interpreter. Can execute scripts like:
 #!/usr/bin/env ai.py
 DESCRIPTION
 Translate text into english.
-PROMPT
+
+SYSTEM
 Translate following text into English, don't add any additional text, just provide translation:
+
+PROMPT
 {ARGS}
 ```
 
@@ -15,7 +18,7 @@ Each script becomes an executable with input to LLM '{ARGS}' provided as stdin o
 Each script supports command line parameters:
     -h - help
     -p - print prompt
-    etc...
+etc...
 """
 
 import sys
@@ -77,7 +80,8 @@ def parse_ai_script(script_path):
     """Parses the .ai script file."""
     description = ""
     prompt_template = ""
-    mode = None  # Can be 'DESCRIPTION', 'PROMPT', or None
+    system_instruction = None
+    mode = None  # Can be 'DESCRIPTION', 'PROMPT', 'SYSTEM' or None
 
     try:
         with open(script_path, 'r') as f:
@@ -92,6 +96,7 @@ def parse_ai_script(script_path):
 
         description_lines = []
         prompt_lines = []
+        system_lines = []
 
         for line in lines:
             stripped_line = line.strip()
@@ -101,11 +106,16 @@ def parse_ai_script(script_path):
             elif stripped_line == "PROMPT":
                 mode = "PROMPT"
                 continue
+            elif stripped_line == "SYSTEM":
+                mode = "SYSTEM"
+                continue
 
             if mode == "DESCRIPTION":
                 description_lines.append(line)
             elif mode == "PROMPT":
                 prompt_lines.append(line)
+            elif mode == "SYSTEM":
+                system_lines.append(line)
 
         if not description_lines:
              print(f"Warning: No DESCRIPTION block found in {script_path}", file=sys.stderr)
@@ -115,8 +125,9 @@ def parse_ai_script(script_path):
 
         description = "".join(description_lines).strip()
         prompt_template = "".join(prompt_lines).strip()
+        system_instruction = "".join(system_lines).strip() if system_lines else None
 
-        return description, prompt_template
+        return description, prompt_template, system_instruction
 
     except FileNotFoundError:
         print(f"Error: Script file not found at {script_path}", file=sys.stderr)
@@ -130,9 +141,11 @@ def parse_ai_script(script_path):
 
 # --- Backend Invocation Functions ---
 
-def invoke_ollama(prompt, model, ollama_url):
+def invoke_ollama(prompt, model, ollama_url, system=None):
     """Invokes the Ollama API."""
     debug(f"--- Invoking Ollama ({model} at {ollama_url}) ---", file=sys.stderr)
+    if system: # Prepend system instruction to prompt for Ollama
+        prompt = f"{system}\n{prompt}"
     payload = {
         "model": model,
         "prompt": prompt,
@@ -205,7 +218,7 @@ def invoke_gemini(prompt, api_key):
              print(f"Gemini Error Message: {e.message}", file=sys.stderr)
         sys.exit(1)
 
-def invoke_gemini_v2(system, prompt, api_key):
+def invoke_gemini_v2(system, prompt, api_key): # Added system parameter
     client = genai.Client(api_key=api_key)
 
     model = "gemini-2.0-flash-thinking-exp-01-21"
@@ -217,14 +230,16 @@ def invoke_gemini_v2(system, prompt, api_key):
             ],
         ),
     ]
-    system_instruction = []
-    if system:
-        system_instruction = [
+
+    if not system:
+      system = "First line of user message is the instruction"
+
+    system_instruction = [
             types.Part.from_text(text=system)
         ]
     generate_content_config = types.GenerateContentConfig(
         response_mime_type="text/plain",
-        system_instruction=system_instruction,
+        system_instruction=system_instruction, # Use system instruction here
     )
 
     res = []
@@ -299,7 +314,7 @@ def main():
         debug = print
 
     # 3. Parse the AI Script File
-    script_description, prompt_template = parse_ai_script(args.script_path)
+    script_description, prompt_template, system_instruction = parse_ai_script(args.script_path)
 
     # 4. Handle Help Request
     if args.help:
@@ -317,6 +332,8 @@ def main():
 
     # 5. Handle Print Prompt Request
     if args.print_prompt:
+        if system_instruction:
+          print(f"SYSTEM\n{system_instruction}\nPROMPT")
         print(prompt_template)
         sys.exit(0)
 
@@ -378,9 +395,9 @@ def main():
     # 9. Invoke Backend
     result = ""
     if chosen_backend == "ollama":
-        result = invoke_ollama(final_prompt, chosen_model, ollama_url)
+        result = invoke_ollama(final_prompt, chosen_model, ollama_url, system_instruction)
     elif chosen_backend == "gemini":
-        result = invoke_gemini_v2("First line of user message is the instruction", final_prompt, gemini_api_key)
+        result = invoke_gemini_v2(system_instruction, final_prompt, gemini_api_key)
     else:
         # Should not happen due to earlier checks
         print("Internal Error: No backend selected.", file=sys.stderr)

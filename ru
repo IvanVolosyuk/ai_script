@@ -3,7 +3,8 @@
 DESCRIPTION
 Translate text to Russian
 
-PROMPT
+SYSTEM
 Translate following text into Russian, reply with the translation only:
-{ARGS}
 
+PROMPT
+{ARGS}

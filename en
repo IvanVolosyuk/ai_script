@@ -3,7 +3,8 @@
 DESCRIPTION
 Translate text to English
 
-PROMPT
+SYSTEM
 Translate following text into English, reply with the translation only:
-{ARGS}
 
+PROMPT
+{ARGS}

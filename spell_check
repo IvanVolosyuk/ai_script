@@ -3,6 +3,8 @@
 DESCRIPTION
 Fix spelling errors
 
-PROMPT
+SYSTEM
 Repeat following text exactly, fix spelling errors:
+
+PROMPT
 {ARGS}
