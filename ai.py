@@ -28,6 +28,7 @@ import configparser
 import requests
 import json
 import google.generativeai as genai_v1
+import logging
 
 from google import genai
 from google.genai import types
@@ -40,8 +41,7 @@ CONFIG_FILE = os.path.expanduser("~/.ai_script.cfg")
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 
 # Default if 'gemini' is chosen but no specific model
-DEFAULT_GEMINI_MODEL = "gemini-1.5-flash"
-#DEFAULT_GEMINI_MODEL = "gemini-2.5.pro-exp-03-25"
+DEFAULT_GEMINI_V1_MODEL = "gemini-1.5-flash"
 
 # --- Helper Functions ---
 
@@ -143,7 +143,7 @@ def parse_ai_script(script_path):
 
 def invoke_ollama(prompt, model, ollama_url, system=None):
     """Invokes the Ollama API."""
-    debug(f"--- Invoking Ollama ({model} at {ollama_url}) ---", file=sys.stderr)
+    logging.debug(f"--- Invoking Ollama ({model} at {ollama_url}) ---")
     if system: # Prepend system instruction to prompt for Ollama
         prompt = f"{system}\n{prompt}"
     payload = {
@@ -183,7 +183,7 @@ def invoke_ollama(prompt, model, ollama_url, system=None):
 
 def invoke_gemini(prompt, api_key):
     """Invokes the Google Gemini API."""
-    debug(f"--- Invoking Gemini ({DEFAULT_GEMINI_MODEL}) ---", file=sys.stderr)
+    logging.debug(f"--- Invoking Gemini ({DEFAULT_GEMINI_V1_MODEL}) ---")
     if not api_key:
         print("Error: Gemini API key not found in config file (~/.ai_script.cfg).", file=sys.stderr)
         print("Please add 'gemini_api_key = YOUR_API_KEY' under [Credentials].", file=sys.stderr)
@@ -202,7 +202,7 @@ def invoke_gemini(prompt, api_key):
         }
 
         model = genai_v1.GenerativeModel(
-            model_name=DEFAULT_GEMINI_MODEL,
+            model_name=DEFAULT_GEMINI_V1_MODEL,
             generation_config=generation_config,
             # safety_settings = Adjust safety settings if needed
         )
@@ -253,18 +253,11 @@ def invoke_gemini_v2(system, prompt, api_key): # Added system parameter
 
 # --- Main Execution ---
 
-def debug(message, *args, **kwargs):
-    pass
-
 def main():
-    global debug
-    # 1. Load Configuration
-    config = load_config()
-    gemini_api_key = config["gemini_api_key"]
-    default_model_setting = config["default_model"]
-    ollama_url = config["ollama_url"]
+    # Configure logging, default level is WARNING
+    logging.basicConfig(level=logging.WARNING, stream=sys.stderr, format='%(levelname)s: %(message)s')
 
-    # 2. Setup Argument Parser
+    # 1. Setup Argument Parser
     parser = argparse.ArgumentParser(
         description="AI Script Interpreter.",
         add_help=False # Disable default help to customize it
@@ -311,7 +304,13 @@ def main():
     args = parser.parse_args()
 
     if args.debug:
-        debug = print
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    # 2. Load Configuration
+    config = load_config()
+    gemini_api_key = config["gemini_api_key"]
+    default_model_setting = config["default_model"]
+    ollama_url = config["ollama_url"]
 
     # 3. Parse the AI Script File
     script_description, prompt_template, system_instruction = parse_ai_script(args.script_path)
@@ -341,12 +340,12 @@ def main():
     # 6. Determine Input for {ARGS}
     if args.optional_text:
         input_args = " ".join(args.optional_text)
-        debug("--- Using command line arguments for {ARGS} ---", file=sys.stderr)
+        logging.debug("--- Using command line arguments for {ARGS} ---")
     else:
         if sys.stdin.isatty():
-             debug("--- Reading from stdin for {ARGS} (press Ctrl+D to end) ---", file=sys.stderr)
+             logging.debug("--- Reading from stdin for {ARGS} (press Ctrl+D to end) ---")
         else:
-             debug("--- Reading piped stdin for {ARGS} ---", file=sys.stderr)
+             logging.debug("--- Reading piped stdin for {ARGS} ---")
         input_args = sys.stdin.read()
         if not input_args:
              print("Warning: No input provided via command line arguments or stdin for {ARGS}.", file=sys.stderr)
@@ -369,15 +368,15 @@ def main():
     elif args.ollama:
         chosen_backend = "ollama"
         chosen_model = args.ollama
-        debug(f"--- Using specified Ollama model: {chosen_model} ---", file=sys.stderr)
+        logging.debug(f"--- Using specified Ollama model: {chosen_model} ---")
     elif args.gemini:
         chosen_backend = "gemini"
         # Gemini model name is currently fixed in invoke_gemini, but could be made configurable
-        chosen_model = DEFAULT_GEMINI_MODEL # Placeholder, actual model used in invoke_gemini
-        debug(f"--- Using specified Gemini model ---", file=sys.stderr)
+        chosen_model = None
+        logging.debug(f"--- Using specified Gemini model ---")
     else:
         # Use default from config
-        debug(f"--- Using default model from config: '{default_model_setting}' ---", file=sys.stderr)
+        logging.debug(f"--- Using default model from config: '{default_model_setting}' ---")
         if default_model_setting.startswith("ollama:"):
             chosen_backend = "ollama"
             chosen_model = default_model_setting.split(":", 1)[1]
@@ -386,7 +385,7 @@ def main():
                  sys.exit(1)
         elif default_model_setting == "gemini":
             chosen_backend = "gemini"
-            chosen_model = DEFAULT_GEMINI_MODEL # Placeholder
+            chosen_model = None
         else:
             # This case should have been caught by config loading, but double-check
             print(f"Error: Unknown default_model type in config: '{default_model_setting}'. Must be 'gemini' or start with 'ollama:'.", file=sys.stderr)
