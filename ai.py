@@ -41,7 +41,7 @@ CONFIG_FILE = os.path.expanduser("~/.ai_script.cfg")
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 
 # Default if 'gemini' is chosen but no specific model
-DEFAULT_GEMINI_V1_MODEL = "gemini-1.5-flash"
+DEFAULT_TEMPERATURE = 0.7 # Default temperature value
 
 # --- Helper Functions ---
 
@@ -81,7 +81,7 @@ def parse_ai_script(script_path):
     description = ""
     prompt_template = ""
     system_instruction = None
-    mode = None  # Can be 'DESCRIPTION', 'PROMPT', 'SYSTEM' or None
+    mode = None  # Can be 'DESCRIPTION', 'PROMPT', 'SYSTEM', 'CONFIG' or None
 
     try:
         with open(script_path, 'r') as f:
@@ -97,6 +97,7 @@ def parse_ai_script(script_path):
         description_lines = []
         prompt_lines = []
         system_lines = []
+        settings_lines = []
 
         for line in lines:
             stripped_line = line.strip()
@@ -109,6 +110,9 @@ def parse_ai_script(script_path):
             elif stripped_line == "SYSTEM":
                 mode = "SYSTEM"
                 continue
+            elif stripped_line == "SETTINGS":
+                mode = "SETTINGS"
+                continue
 
             if mode == "DESCRIPTION":
                 description_lines.append(line)
@@ -116,6 +120,8 @@ def parse_ai_script(script_path):
                 prompt_lines.append(line)
             elif mode == "SYSTEM":
                 system_lines.append(line)
+            elif mode == "SETTINGS": # Capture config lines
+                settings_lines.append(line)
 
         if not description_lines:
              print(f"Warning: No DESCRIPTION block found in {script_path}", file=sys.stderr)
@@ -127,7 +133,18 @@ def parse_ai_script(script_path):
         prompt_template = "".join(prompt_lines).strip()
         system_instruction = "".join(system_lines).strip() if system_lines else None
 
-        return description, prompt_template, system_instruction
+        # Parse config lines for temperature
+        settings_text = "".join(settings_lines)
+        settings = None
+        if settings_text:
+            try:
+                settings = configparser.ConfigParser()
+                settings.read_string(settings_text)
+            except Exception as e:
+                logging.warn(f"Error parsing CONFIG block: {e}.")
+
+
+        return description, prompt_template, system_instruction, settings
 
     except FileNotFoundError:
         print(f"Error: Script file not found at {script_path}", file=sys.stderr)
@@ -141,7 +158,7 @@ def parse_ai_script(script_path):
 
 # --- Backend Invocation Functions ---
 
-def invoke_ollama(prompt, model, ollama_url, system=None):
+def invoke_ollama(prompt, model, ollama_url, system, settings):
     """Invokes the Ollama API."""
     logging.debug(f"--- Invoking Ollama ({model} at {ollama_url}) ---")
     if system: # Prepend system instruction to prompt for Ollama
@@ -151,12 +168,19 @@ def invoke_ollama(prompt, model, ollama_url, system=None):
         "prompt": prompt,
         "stream": False, # Keep it simple for now
     }
+    if settings:
+        options = {}
+        temperature = settings.get("Model", "temperature")
+        if temperature:
+            options["temperature"] = float(temperature)
+        payload["options"] = options
+
     headers = {'Content-Type': 'application/json'}
 
     try:
         response = requests.post(f"{ollama_url}/api/generate", json=payload, headers=headers, timeout=120) # Add timeout
         response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
-        return response.json()["response"]
+        print(response.json()["response"])
     except requests.exceptions.ConnectionError:
         print(f"Error: Could not connect to Ollama server at {ollama_url}. Is it running?", file=sys.stderr)
         sys.exit(1)
@@ -181,44 +205,7 @@ def invoke_ollama(prompt, model, ollama_url, system=None):
          sys.exit(1)
 
 
-def invoke_gemini(prompt, api_key):
-    """Invokes the Google Gemini API."""
-    logging.debug(f"--- Invoking Gemini ({DEFAULT_GEMINI_V1_MODEL}) ---")
-    if not api_key:
-        print("Error: Gemini API key not found in config file (~/.ai_script.cfg).", file=sys.stderr)
-        print("Please add 'gemini_api_key = YOUR_API_KEY' under [Credentials].", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        genai_v1.configure(api_key=api_key)
-
-        # Basic config, adjust as needed
-        generation_config = {
-            "temperature": 0.7, # Adjusted for potentially more predictable output
-            "top_p": 0.95,
-            "top_k": 40,
-            "max_output_tokens": 2048, # Increased token limit
-            "response_mime_type": "text/plain",
-        }
-
-        model = genai_v1.GenerativeModel(
-            model_name=DEFAULT_GEMINI_V1_MODEL,
-            generation_config=generation_config,
-            # safety_settings = Adjust safety settings if needed
-        )
-
-        chat_session = model.start_chat() # Simpler than chat for single turn
-        response = chat_session.send_message(prompt)
-        return response.text
-
-    except Exception as e:
-        print(f"Error invoking Gemini API: {e}", file=sys.stderr)
-        # Attempt to access specific Gemini error details if available
-        if hasattr(e, 'message'):
-             print(f"Gemini Error Message: {e.message}", file=sys.stderr)
-        sys.exit(1)
-
-def invoke_gemini_v2(system, prompt, api_key): # Added system parameter
+def invoke_gemini_v2(system, prompt, api_key, settings):
     client = genai.Client(api_key=api_key)
 
     model = "gemini-2.0-flash-thinking-exp-01-21"
@@ -237,9 +224,16 @@ def invoke_gemini_v2(system, prompt, api_key): # Added system parameter
     system_instruction = [
             types.Part.from_text(text=system)
         ]
+    extra_args = {}
+    if settings:
+        temperature = settings.get("Model", "temperature")
+        if temperature:
+            extra_args["temperature"] = float(temperature)
+
     generate_content_config = types.GenerateContentConfig(
         response_mime_type="text/plain",
-        system_instruction=system_instruction, # Use system instruction here
+        system_instruction=system_instruction,
+        **extra_args
     )
 
     res = []
@@ -248,7 +242,7 @@ def invoke_gemini_v2(system, prompt, api_key): # Added system parameter
         contents=contents,
         config=generate_content_config,
     ):
-        res += chunk.text
+        print(chunk.text, end="")
     return "".join(res)
 
 # --- Main Execution ---
@@ -313,7 +307,7 @@ def main():
     ollama_url = config["ollama_url"]
 
     # 3. Parse the AI Script File
-    script_description, prompt_template, system_instruction = parse_ai_script(args.script_path)
+    script_description, prompt_template, system_instruction, settings = parse_ai_script(args.script_path)
 
     # 4. Handle Help Request
     if args.help:
@@ -372,7 +366,6 @@ def main():
         logging.debug(f"--- Using specified Ollama model: {chosen_model} ---")
     elif args.gemini:
         chosen_backend = "gemini"
-        # Gemini model name is currently fixed in invoke_gemini, but could be made configurable
         chosen_model = None
         logging.debug(f"--- Using specified Gemini model ---")
     else:
@@ -395,16 +388,14 @@ def main():
     # 9. Invoke Backend
     result = ""
     if chosen_backend == "ollama":
-        result = invoke_ollama(final_prompt, chosen_model, ollama_url, system_instruction)
+        invoke_ollama(final_prompt, chosen_model, ollama_url, system_instruction, settings)
     elif chosen_backend == "gemini":
-        result = invoke_gemini_v2(system_instruction, final_prompt, gemini_api_key)
+        invoke_gemini_v2(system_instruction, final_prompt, gemini_api_key, settings)
     else:
         # Should not happen due to earlier checks
         print("Internal Error: No backend selected.", file=sys.stderr)
         sys.exit(1)
 
-    # 10. Print Result
-    print(result)
     sys.exit(0)
 
 
