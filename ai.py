@@ -1,12 +1,34 @@
 #!/home/ivan/experiments/openai/telegram/venv/bin/python
 
+"""
+AI script interpreter. Can execute scripts like:
+```
+#!/usr/bin/env ai.py
+DESCRIPTION
+Translate text into english.
+PROMPT
+Translate following text into English, don't add any additional text, just provide translation:
+{ARGS}
+```
+
+Each script becomes an executable with input to LLM '{ARGS}' provided as stdin or command parameters.
+Each script supports command line parameters:
+    -h - help
+    -p - print prompt
+    etc...
+"""
+
 import sys
 import os
 import argparse
 import configparser
 import requests
 import json
-import google.generativeai as genai
+import google.generativeai as genai_v1
+
+from google import genai
+from google.genai import types
+
 
 # --- Configuration ---
 CONFIG_FILE = os.path.expanduser("~/.ai_script.cfg")
@@ -155,7 +177,7 @@ def invoke_gemini(prompt, api_key):
         sys.exit(1)
 
     try:
-        genai.configure(api_key=api_key)
+        genai_v1.configure(api_key=api_key)
 
         # Basic config, adjust as needed
         generation_config = {
@@ -166,7 +188,7 @@ def invoke_gemini(prompt, api_key):
             "response_mime_type": "text/plain",
         }
 
-        model = genai.GenerativeModel(
+        model = genai_v1.GenerativeModel(
             model_name=DEFAULT_GEMINI_MODEL,
             generation_config=generation_config,
             # safety_settings = Adjust safety settings if needed
@@ -182,6 +204,37 @@ def invoke_gemini(prompt, api_key):
         if hasattr(e, 'message'):
              print(f"Gemini Error Message: {e.message}", file=sys.stderr)
         sys.exit(1)
+
+def invoke_gemini_v2(system, prompt, api_key):
+    client = genai.Client(api_key=api_key)
+
+    model = "gemini-2.0-flash-thinking-exp-01-21"
+    contents = [
+        types.Content(
+            role="user",
+            parts=[
+                types.Part.from_text(text=prompt),
+            ],
+        ),
+    ]
+    system_instruction = []
+    if system:
+        system_instruction = [
+            types.Part.from_text(text=system)
+        ]
+    generate_content_config = types.GenerateContentConfig(
+        response_mime_type="text/plain",
+        system_instruction=system_instruction,
+    )
+
+    res = []
+    for chunk in client.models.generate_content_stream(
+        model=model,
+        contents=contents,
+        config=generate_content_config,
+    ):
+        res += chunk.text
+    return "".join(res)
 
 # --- Main Execution ---
 
@@ -262,13 +315,13 @@ def main():
         print(options_part)
         sys.exit(0)
 
-    # 7. Handle Print Prompt Request
+    # 5. Handle Print Prompt Request
     if args.print_prompt:
         print(prompt_template)
         sys.exit(0)
 
 
-    # 5. Determine Input for {ARGS}
+    # 6. Determine Input for {ARGS}
     if args.optional_text:
         input_args = " ".join(args.optional_text)
         debug("--- Using command line arguments for {ARGS} ---", file=sys.stderr)
@@ -281,7 +334,7 @@ def main():
         if not input_args:
              print("Warning: No input provided via command line arguments or stdin for {ARGS}.", file=sys.stderr)
 
-    # 6. Format the Prompt
+    # 7. Format the Prompt
     try:
         final_prompt = prompt_template.replace("{ARGS}", input_args)
     except Exception as e:
@@ -327,7 +380,7 @@ def main():
     if chosen_backend == "ollama":
         result = invoke_ollama(final_prompt, chosen_model, ollama_url)
     elif chosen_backend == "gemini":
-        result = invoke_gemini(final_prompt, gemini_api_key)
+        result = invoke_gemini_v2("First line of user message is the instruction", final_prompt, gemini_api_key)
     else:
         # Should not happen due to earlier checks
         print("Internal Error: No backend selected.", file=sys.stderr)
