@@ -1,0 +1,9 @@
+#!/home/ivan/experiments/code/ai_script/ai.py
+
+DESCRIPTION
+Translate text to English
+
+PROMPT
+Translate following text into English, reply with the translation only:
+{ARGS}
+

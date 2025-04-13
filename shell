@@ -1,0 +1,9 @@
+#!/home/ivan/experiments/code/ai_script/ai.py -g
+
+DESCRIPTION
+Suggest shell command
+
+PROMPT
+The query below asks for a shell command to perform a certain function. Your output should be one-liner bash command to perform exactly that as it will be sent directly to Linux bash to perform that function. If not specified otherwise user asks to perform the action in current directory. Don't quote the command. User query:
+{ARGS}
+

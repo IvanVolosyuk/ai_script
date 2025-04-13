@@ -1,0 +1,9 @@
+#!/home/ivan/experiments/code/ai_script/ai.py
+
+DESCRIPTION
+Implement code. Replace content with updated copy following instructions
+on lines prefixed by %.
+
+PROMPT
+Below is a source file. The file contains instructions preceded by '%'. Modify the source file according to these instructions. Return the modified source file without the '%' instruction lines. Do not add any explanations except for code comments. The file is:
+{ARGS}
