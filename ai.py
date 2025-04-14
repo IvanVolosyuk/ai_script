@@ -1,4 +1,7 @@
-#!/home/ivan/experiments/openai/telegram/venv/bin/python
+#!/usr/bin/env python3
+
+# Need following packages:
+# pip install google-genai
 
 """
 AI script interpreter. Can execute scripts like:
@@ -27,7 +30,6 @@ import argparse
 import configparser
 import requests
 import json
-import google.generativeai as genai_v1
 import logging
 
 from google import genai
@@ -50,7 +52,11 @@ def load_config():
     config = configparser.ConfigParser()
     if not os.path.exists(CONFIG_FILE):
         print(f"Warning: Configuration file not found at {CONFIG_FILE}", file=sys.stderr)
-        return {"gemini_api_key": None, "default_model": "ollama:gemma3:1b"} # Sensible default fallback
+        return {
+                "gemini_api_key": None,
+                "default_model": "ollama:gemma3:1b",
+                "ollama_url": "http://localhost:11434",
+                }
 
     try:
         config.read(CONFIG_FILE)
