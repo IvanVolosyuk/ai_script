@@ -1,0 +1,11 @@
+#!/home/ivan/experiments/code/ai_script/ai.py
+
+DESCRIPTION
+Tell a joke
+
+SETTINGS
+[Model]
+temperature = 1
+
+PROMPT
+Tell a joke and stop. Don't ask extra questions or add any extra comments.

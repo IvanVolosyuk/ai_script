@@ -1,0 +1,15 @@
+#!/home/ivan/experiments/code/ai_script/ai.py
+
+DESCRIPTION
+Quick question to LLM
+
+SETTINGS
+[Model]
+temperature = 0
+
+SYSTEM
+
+Answer in conscise way. The output will be displayed in linux xterm terminal, use only the formatting available there.
+
+PROMPT
+{ARGS}

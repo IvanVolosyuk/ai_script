@@ -166,8 +166,8 @@ def invoke_ollama(prompt, model, ollama_url, system, settings):
     payload = {
         "model": model,
         "prompt": prompt,
-        "stream": False, # Keep it simple for now
     }
+
     if settings:
         options = {}
         temperature = settings.get("Model", "temperature")
@@ -178,9 +178,21 @@ def invoke_ollama(prompt, model, ollama_url, system, settings):
     headers = {'Content-Type': 'application/json'}
 
     try:
-        response = requests.post(f"{ollama_url}/api/generate", json=payload, headers=headers, timeout=120) # Add timeout
+        response = requests.post(f"{ollama_url}/api/generate", json=payload, headers=headers, timeout=120, stream=True)
         response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
-        print(response.json()["response"])
+        for line in response.iter_lines():
+            if line: # filter out keep-alive new lines
+                try:
+                    json_data = json.loads(line)
+                    if 'response' in json_data:
+                        print(json_data["response"], end="", flush=True) # Print response chunk by chunk
+                    elif 'error' in json_data:
+                        print(f"Error from Ollama: {json_data['error']}", file=sys.stderr)
+                        sys.exit(1)
+                except json.JSONDecodeError:
+                    logging.error(f"Error decoding JSON chunk: {line}")
+                    continue # Skip to the next line in stream
+
     except requests.exceptions.ConnectionError:
         print(f"Error: Could not connect to Ollama server at {ollama_url}. Is it running?", file=sys.stderr)
         sys.exit(1)
@@ -195,14 +207,6 @@ def invoke_ollama(prompt, model, ollama_url, system, settings):
         except: # Handle cases where response might not exist
              pass
         sys.exit(1)
-    except json.JSONDecodeError:
-        print(f"Error: Could not decode JSON response from Ollama.", file=sys.stderr)
-        print(f"Ollama Raw Response: {response.text}", file=sys.stderr)
-        sys.exit(1)
-    except KeyError:
-         print(f"Error: Unexpected response format from Ollama (missing 'response' key).", file=sys.stderr)
-         print(f"Ollama Raw Response: {response.json()}", file=sys.stderr)
-         sys.exit(1)
 
 
 def invoke_gemini_v2(system, prompt, api_key, settings):
@@ -242,7 +246,7 @@ def invoke_gemini_v2(system, prompt, api_key, settings):
         contents=contents,
         config=generate_content_config,
     ):
-        print(chunk.text, end="")
+        print(chunk.text, end="", flush=True)
     return "".join(res)
 
 # --- Main Execution ---
