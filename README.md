@@ -30,7 +30,7 @@ This project provides a simple scripting language for interacting with Large Lan
     ```bash
     chmod +x ai.py
     chmod +x en
-    ```  
+    ```
 
 ## Configuration
 
@@ -48,9 +48,8 @@ default_model = ollama:gemma3:1b  ; or gemini
 [Ollama]
 url = http://localhost:11434
 ```
-Note:
 
-Replace ```YOUR_GEMINI_API_KEY``` with your actual Google Gemini API key if you plan to use Gemini. You can obtain one from the Google Cloud AI Platform.
+**Note:** Replace ```YOUR_GEMINI_API_KEY``` with your actual Google Gemini API key if you plan to use Gemini. You can obtain one from the Google Cloud AI Platform.
 
 The ```default_model``` specifies the LLM to use by default. Use ```gemini``` for Google's model or ```ollama:MODEL_NAME``` (e.g., ```ollama:gemma3:1b```) for a local Ollama model.
 
@@ -58,7 +57,6 @@ The url under the [Ollama] section specifies the address of your local Ollama se
 If the configuration file is not found, the script will use default values.
 
 ## Usage
-There are a few example scripts provided.
 
 AI Script Structure
 An AI script file is structured using the following blocks:
@@ -87,7 +85,6 @@ PROMPT
 echo Hi | ./ru
 ./ru Hi
 ```
-Bash
 
 ## Command-Line Options
 
@@ -100,7 +97,7 @@ Each script supports the following command-line options:
 -p, --print-prompt: Print the final prompt to standard output instead of executing it.
 ```
 
-Examples:
+## Examples
 
 Get help for a specific script:
 
@@ -125,6 +122,7 @@ Print the prompt before execution:
 ```
 
 ## Advanced Usage
+
 ### Script-Specific Settings
 
 You can include a SETTINGS block in your AI script to configure parameters specific to that script. Currently, the script supports setting the temperature for the LLM within the [Model] section.
@@ -151,7 +149,9 @@ Summarize this:
 This will set the temperature for the LLM to 0.5 when this script is executed.
 
 ## Contributing
+
 Contributions are welcome! Feel free to submit issues or pull requests to suggest improvements or report bugs.
 
 ## License
+
 MIT License
